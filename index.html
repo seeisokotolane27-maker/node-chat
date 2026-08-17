@@ -1,51 +1,10 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#050805"><title>NODE//CHAT v2</title>
-<style>
-:root{--bg:#050805;--panel:#071008;--line:#17351d;--green:#49ff78;--dim:#72a47c;--text:#d8f5dc;--red:#ff756d}
-*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
-.app{width:min(900px,100%);height:100dvh;margin:auto;display:flex;flex-direction:column;border-left:1px solid var(--line);border-right:1px solid var(--line)}
-header{padding:13px 15px;border-bottom:1px solid var(--line);background:#071008;display:flex;justify-content:space-between;align-items:center}.title{color:var(--green);font-weight:800;letter-spacing:1px}.status{font-size:11px;color:var(--dim)}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#555;margin-right:6px}.online{background:var(--green);box-shadow:0 0 9px var(--green)}
-#setup{padding:20px 15px}.box{border:1px solid var(--line);background:var(--panel);padding:18px;border-radius:8px;box-shadow:0 0 25px #0008}
-label{display:block;color:var(--dim);font-size:11px;margin:0 0 7px}input,button{font:inherit}input{width:100%;background:#030503;color:var(--text);border:1px solid #285332;border-radius:6px;padding:12px;outline:0}input:focus{border-color:var(--green);box-shadow:0 0 0 2px #49ff7818}.row{display:flex;gap:8px;margin-top:12px}.row>*{flex:1}button{border:1px solid #2b6b37;background:#0b1b0e;color:var(--green);border-radius:6px;padding:11px 13px;cursor:pointer}.primary{background:#12351a}.note{font-size:11px;color:#52765a;line-height:1.55;margin-top:13px}.err{color:var(--red);font-size:11px;margin-top:9px;display:none}
-#chat{display:none;flex:1;min-height:0;flex-direction:column}.meta{padding:9px 14px;border-bottom:1px solid var(--line);font-size:10px;color:var(--dim);display:flex;justify-content:space-between}.messages{flex:1;overflow:auto;padding:17px 14px}.msg{margin:0 0 15px;max-width:88%}.who{color:var(--green);font-size:11px}.bubble{margin-top:4px;white-space:pre-wrap;word-break:break-word}.mine{margin-left:auto;text-align:right}.mine .bubble{color:#bafcc6}.typing{height:19px;padding:0 14px;color:#47724f;font-size:10px}.composer{border-top:1px solid var(--line);padding:9px;display:flex;gap:8px;background:#071008}.composer input{flex:1}@media(max-width:500px){.composer{padding-bottom:calc(9px + env(safe-area-inset-bottom))}}
-</style></head>
-<body><div class="app">
-<header><div class="title">NODE//CHAT v2</div><div class="status"><span id="dot" class="dot"></span><span id="connection">NOT CONNECTED</span></div></header>
-<section id="setup"><div class="box"><div style="color:var(--green);margin-bottom:16px">&gt; ESTABLISH SECURE CHANNEL</div>
-<label>CODENAME</label><input id="name" maxlength="24" placeholder="e.g. FINCH"><div style="height:12px"></div>
-<label>ROOM CODE</label><input id="room" maxlength="80" placeholder="Create a secret code and share it">
-<div class="row"><button class="primary" id="join">CONNECT</button><button id="random">GENERATE CODE</button></div><div id="err" class="err"></div>
-<div class="note">Both phones must use the same room code. Keep the room code private.</div></div></section>
-<section id="chat"><div class="meta"><span>CHANNEL: <b id="roomLabel"></b></span><span id="presence">0 ONLINE</span></div>
-<div id="messages" class="messages"></div><div id="typing" class="typing"></div>
-<form class="composer" id="form"><input id="message" placeholder="type message..." maxlength="2000" autocomplete="off"><button>SEND</button></form></section>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-const SUPABASE_URL="https://vgxvvsejfoamumswwtsw.supabase.co";
-const SUPABASE_KEY="sb_publishable_LWClNy-NVIhH5CEMZ4Z-Fg__FDIHo_7";
-let client,channel,user="",room="",timer;const $=id=>document.getElementById(id);
-function err(s){$("err").textContent=s;$("err").style.display="block"}function randomCode(){$("room").value="NODE-"+crypto.randomUUID().slice(0,8).toUpperCase()}
-function status(s,on){$("connection").textContent=s;$("dot").classList.toggle("online",on)}
-function save(m){let a=[];try{a=JSON.parse(localStorage.getItem("nc:"+room)||"[]")}catch{}a.push(m);localStorage.setItem("nc:"+room,JSON.stringify(a.slice(-200)))}
-function render(m){let d=document.createElement("div");d.className="msg "+(m.user===user?"mine":"");let w=document.createElement("div");w.className="who";w.textContent=m.user+" <"+new Date(m.time).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})+">";let b=document.createElement("div");b.className="bubble";b.textContent=m.text;d.append(w,b);$("messages").appendChild(d);$("messages").scrollTop=$("messages").scrollHeight}
-function load(){let a=[];try{a=JSON.parse(localStorage.getItem("nc:"+room)||"[]")}catch{}$("messages").innerHTML="";a.forEach(render)}
-async function connect(){
- user=$("name").value.trim();room=$("room").value.trim();if(!user||!room)return err("CODENAME AND ROOM CODE ARE REQUIRED");
- try{
-  client=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);channel=client.channel("room:"+room,{config:{broadcast:{self:false},presence:{key:crypto.randomUUID()}}});
-  channel.on("broadcast",{event:"message"},({payload})=>{save(payload);render(payload)});
-  channel.on("broadcast",{event:"typing"},({payload})=>{if(payload.user!==user)$("typing").textContent=payload.on?payload.user+" is typing...":""});
-  channel.on("presence",{event:"sync"},()=>{$("presence").textContent=Object.keys(channel.presenceState()).length+" ONLINE"});
-  const s=await new Promise(resolve=>channel.subscribe(async x=>{if(x==="SUBSCRIBED"){await channel.track({user,online_at:new Date().toISOString()});resolve(x)}else if(x==="CHANNEL_ERROR"||x==="TIMED_OUT")resolve(x)}));
-  if(s!=="SUBSCRIBED")throw Error("Realtime connection failed: "+s);
-  $("setup").style.display="none";$("chat").style.display="flex";$("roomLabel").textContent=room;status("CONNECTED",true);load();
- }catch(e){console.error(e);err("CONNECTION FAILED: "+e.message)}
-}
-$("join").onclick=connect;$("random").onclick=randomCode;
-$("form").onsubmit=async e=>{e.preventDefault();let text=$("message").value.trim();if(!text)return;let m={user,text,time:Date.now()};save(m);render(m);$("message").value="";await channel.send({type:"broadcast",event:"message",payload:m});$("typing").textContent=""};
-$("message").oninput=async()=>{if(!channel)return;clearTimeout(timer);await channel.send({type:"broadcast",event:"typing",payload:{user,on:true}});timer=setTimeout(()=>channel.send({type:"broadcast",event:"typing",payload:{user,on:false}}),900)};
-</script></body></html>
+NODE//CHAT v4
+NOT CONNECTED
+> ESTABLISH SECURE CHANNEL
+CODENAME
+
+ROOM CODE
+CONNECT
+GENERATE CODE
+ENABLE PUSH NOTIFICATIONS
+On iPhone: open this site in Safari, Share → Add to Home Screen 
